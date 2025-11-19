@@ -12,27 +12,24 @@ logger = logging.getLogger(__name__)
 
 class PLPredictionService:
     def __init__(self):
-        # Use Random Forest with optimized hyperparameters for better performance
+        # Optimized Random Forest for best performance  
         self.model = RandomForestClassifier(
-            n_estimators=300,
-            max_depth=10,
-            min_samples_split=5,
-            min_samples_leaf=2,
+            n_estimators=250,
+            max_depth=25,
+            min_samples_split=8,
+            min_samples_leaf=3,
             max_features='sqrt',
-            class_weight='balanced',  # Handle class imbalance
-            random_state=42,
-            n_jobs=-1  # Use all CPU cores
+            bootstrap=True,
+            random_state=1,
+            n_jobs=-1
         )
-        self.scaler = StandardScaler()
         self.predictors = ["home_away", "opponent_code", "hour", "day_of_week"]
         self.rolling_predictors = [
             "gf_rolling", "ga_rolling", "sh_rolling", "sot_rolling",
             "dist_rolling", "fk_rolling", "pk_rolling", "pkatt_rolling"
         ]
-        # Add derived features for better predictions
-        self.derived_predictors = [
-            "goal_diff_rolling", "form_rolling", "attack_strength", "defense_strength"
-        ]
+        # Keep derived features but make them simpler
+        self.derived_predictors = ["goal_diff_rolling"]
         self.is_trained = False
     
     def prepare_match_data(self, matches_queryset):
@@ -73,12 +70,9 @@ class PLPredictionService:
         
         df = pd.DataFrame(matches_data)
         
-        # Add derived features
-        if not df.empty and 'gf_rolling' in df.columns:
+        # Add simple derived feature
+        if not df.empty and 'gf_rolling' in df.columns and 'ga_rolling' in df.columns:
             df['goal_diff_rolling'] = df['gf_rolling'] - df['ga_rolling']
-            df['form_rolling'] = df['gf_rolling'] / (df['ga_rolling'] + 1)  # Avoid division by zero
-            df['attack_strength'] = df['sh_rolling'] * (df['sot_rolling'] / (df['sh_rolling'] + 1))
-            df['defense_strength'] = 1 / (df['ga_rolling'] + 1)
         
         return df
     
@@ -143,9 +137,6 @@ class PLPredictionService:
             test_mask = ~X_test.isna().any(axis=1)
             X_test = X_test[test_mask]
             y_test = y_test[test_mask]
-            
-            # Random Forest doesn't need scaling, but we'll keep scaler fitted for consistency
-            self.scaler.fit(X_train)
             
             # Train model
             self.model.fit(X_train, y_train)
@@ -215,17 +206,13 @@ class PLPredictionService:
                     dist_rolling, fk_rolling, pk_rolling, pkatt_rolling
                 ]
                 
-                # Calculate derived features
+                # Simple derived feature
                 goal_diff_rolling = gf_rolling - ga_rolling
-                form_rolling = gf_rolling / (ga_rolling + 1)
-                attack_strength = sh_rolling * (sot_rolling / (sh_rolling + 1))
-                defense_strength = 1 / (ga_rolling + 1)
-                
-                derived_values = [goal_diff_rolling, form_rolling, attack_strength, defense_strength]
+                derived_values = [goal_diff_rolling]
             else:
                 # Use league averages or defaults if no recent matches
                 rolling_values = [1.5, 1.5, 12.0, 4.0, 0.0, 0.0, 0.0, 0.0]
-                derived_values = [0.0, 1.0, 4.0, 0.4]  # Neutral defaults
+                derived_values = [0.0]  # Neutral goal diff
             
             # Create feature vector with all features in correct order
             features = [home_away, opponent_code, hour, day_of_week] + rolling_values + derived_values
