@@ -25,6 +25,7 @@ Premier League Match Predictor is a full-stack web application that uses machine
 
 - **🤖 Machine Learning**: Random Forest algorithm trained on historical Premier League data
 - **📊 Real-time Predictions**: Get instant match outcome predictions with probability scores
+- **🕷️ Web Scraping**: Automated data collection from FBref.com for up-to-date statistics
 - **📈 Team Statistics**: Comprehensive team performance metrics and recent form analysis
 - **🎨 Modern UI**: Beautiful, responsive interface built with Next.js and Tailwind CSS
 - **🔄 RESTful API**: Well-documented Django REST Framework API
@@ -50,6 +51,12 @@ Premier League Match Predictor is a full-stack web application that uses machine
 - Track model improvements over time
 - Retrain model with latest data
 - Feature importance analysis
+
+### 🕷️ Data Scraping
+- Automated web scraping from FBref.com
+- Real-time Premier League statistics collection
+- Team stats, match results, shooting, and possession data
+- Respectful scraping with built-in rate limiting
 
 ### 🎨 User Interface
 - Clean, intuitive tabbed interface
@@ -263,6 +270,12 @@ PLWebsite/
 │   ├── package.json              # Node dependencies
 │   └── Dockerfile                # Frontend Docker image
 │
+├── DataScraping/                  # Web scraping module
+│   ├── PL_Data_Scraping.py       # Main scraper script
+│   ├── import_to_django.py       # Import utility
+│   ├── requirements.txt          # Scraping dependencies
+│   └── README.md                 # Scraping documentation
+│
 ├── matches.csv                    # Historical match data
 ├── docker-compose.yml             # PostgreSQL + pgAdmin
 ├── docker-compose.dev.yml         # Full stack setup
@@ -368,6 +381,74 @@ The model is trained on historical Premier League match data with features engin
 
 ---
 
+## 🕷️ Data Scraping
+
+The project includes an automated web scraping module to collect the latest Premier League statistics from FBref.com.
+
+### Quick Start
+
+```bash
+# Install scraping dependencies
+cd DataScraping
+pip install -r requirements.txt
+
+# Run the scraper
+python PL_Data_Scraping.py
+```
+
+### What Gets Scraped
+
+- **Team Statistics**: Player-level performance data for all teams
+- **Match Results**: Complete fixture list with scores and match stats
+- **Shooting Statistics**: Goals, shots, xG, and accuracy metrics
+- **Possession Statistics**: Passing, touches, and possession data
+
+### Features
+
+- ✅ Automated collection from FBref.com
+- ✅ Respectful scraping with rate limiting (5-10 second delays)
+- ✅ Comprehensive error handling and logging
+- ✅ Timestamped output files for version control
+- ✅ Easy import to Django database
+
+### Output Files
+
+All scraped data is saved to `DataScraping/output/` with timestamps:
+- `team_stats_YYYYMMDD_HHMMSS.csv`
+- `match_results_YYYYMMDD_HHMMSS.csv`
+- `shooting_stats_YYYYMMDD_HHMMSS.csv`
+- `possession_stats_YYYYMMDD_HHMMSS.csv`
+
+### Import to Django
+
+Use the import utility to load scraped data into the database:
+
+```bash
+cd DataScraping
+python import_to_django.py
+```
+
+The script will automatically use the most recent scraped file and update your Django database with the latest match data.
+
+### Scraping Schedule
+
+For best results, run the scraper:
+- **Weekly** during the season
+- **After each matchday** for latest results
+- Before **training the ML model** for updated predictions
+
+### Important Notes
+
+⚠️ **Respectful Usage**: This scraper is for educational purposes only. Please:
+- Review FBref's Terms of Service
+- Don't scrape excessively
+- Use appropriate delays between requests
+- Consider supporting FBref if using their data extensively
+
+📖 **Full Documentation**: See [DataScraping/README.md](DataScraping/README.md) for detailed usage, API reference, and troubleshooting.
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please follow these steps:
@@ -412,7 +493,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- Premier League for providing match data
+- [FBref.com](https://fbref.com) for providing comprehensive Premier League statistics
+- Premier League for the amazing football matches
 - Scikit-learn for the machine learning framework
 - Django and Next.js communities for excellent documentation
 - All contributors who help improve this project

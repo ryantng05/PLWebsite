@@ -78,7 +78,7 @@ class Prediction(models.Model):
         ('L', 'Loss'),
     ]
     
-    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='predictions')
+    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='predictions', null=True, blank=True)
     predicted_result = models.CharField(max_length=1, choices=PREDICTION_CHOICES)
     confidence = models.FloatField(default=0.0)  # 0-1 confidence score
     model_version = models.CharField(max_length=50, default='v1.0')
