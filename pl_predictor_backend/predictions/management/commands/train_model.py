@@ -23,19 +23,18 @@ class Command(BaseCommand):
         self.stdout.write(f'Found {match_count} matches in database')
         
         # Train the model
-        success = ml_service.train_model(matches)
+        result = ml_service.train_model(matches)
         
-        if success:
+        if result and isinstance(result, dict):
             self.stdout.write(self.style.SUCCESS(f'✅ Model trained successfully!'))
-            
-            # Check if performance_metrics exists and display them
-            if hasattr(ml_service, 'performance_metrics') and ml_service.performance_metrics:
-                self.stdout.write(f'   Model accuracy: {ml_service.performance_metrics.get("accuracy", 0):.2%}')
-                self.stdout.write(f'   Precision: {ml_service.performance_metrics.get("precision", 0):.2%}')
-                self.stdout.write(f'   Recall: {ml_service.performance_metrics.get("recall", 0):.2%}')
-                self.stdout.write(f'   F1 Score: {ml_service.performance_metrics.get("f1_score", 0):.2%}')
-            else:
-                self.stdout.write('   (Performance metrics will be available after model evaluation)')
+            self.stdout.write(f'   Model accuracy: {result.get("accuracy", 0):.2%}')
+            self.stdout.write(f'   Precision: {result.get("precision", 0):.2%}')
+            self.stdout.write(f'   Recall: {result.get("recall", 0):.2%}')
+            self.stdout.write(f'   F1 Score: {result.get("f1_score", 0):.2%}')
+            self.stdout.write(f'   Test set size: {result.get("test_matches_count", 0)} matches')
+        elif result:
+            self.stdout.write(self.style.SUCCESS(f'✅ Model trained successfully!'))
+            self.stdout.write('   (Performance metrics not available)')
         else:
             self.stdout.write(self.style.ERROR('❌ Model training failed. Check logs for details.'))
 

@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.preprocessing import StandardScaler
 from django.utils import timezone
 from datetime import datetime, time
 import logging
@@ -11,15 +12,26 @@ logger = logging.getLogger(__name__)
 
 class PLPredictionService:
     def __init__(self):
+        # Use Random Forest with optimized hyperparameters for better performance
         self.model = RandomForestClassifier(
-            n_estimators=100, 
-            min_samples_split=10, 
-            random_state=1
+            n_estimators=300,
+            max_depth=10,
+            min_samples_split=5,
+            min_samples_leaf=2,
+            max_features='sqrt',
+            class_weight='balanced',  # Handle class imbalance
+            random_state=42,
+            n_jobs=-1  # Use all CPU cores
         )
+        self.scaler = StandardScaler()
         self.predictors = ["home_away", "opponent_code", "hour", "day_of_week"]
         self.rolling_predictors = [
             "gf_rolling", "ga_rolling", "sh_rolling", "sot_rolling",
             "dist_rolling", "fk_rolling", "pk_rolling", "pkatt_rolling"
+        ]
+        # Add derived features for better predictions
+        self.derived_predictors = [
+            "goal_diff_rolling", "form_rolling", "attack_strength", "defense_strength"
         ]
         self.is_trained = False
     
@@ -59,7 +71,16 @@ class PLPredictionService:
             }
             matches_data.append(match_data)
         
-        return pd.DataFrame(matches_data)
+        df = pd.DataFrame(matches_data)
+        
+        # Add derived features
+        if not df.empty and 'gf_rolling' in df.columns:
+            df['goal_diff_rolling'] = df['gf_rolling'] - df['ga_rolling']
+            df['form_rolling'] = df['gf_rolling'] / (df['ga_rolling'] + 1)  # Avoid division by zero
+            df['attack_strength'] = df['sh_rolling'] * (df['sot_rolling'] / (df['sh_rolling'] + 1))
+            df['defense_strength'] = 1 / (df['ga_rolling'] + 1)
+        
+        return df
     
     def calculate_rolling_averages(self, df, cols, new_cols, window=3):
         """Calculate rolling averages for team form"""
@@ -103,18 +124,35 @@ class PLPredictionService:
                 logger.warning("Insufficient data for train/test split")
                 return False
             
-            # Prepare features
-            all_predictors = self.predictors + self.rolling_predictors
+            # Prepare features - include derived features
+            all_predictors = self.predictors + self.rolling_predictors + self.derived_predictors
             available_predictors = [p for p in all_predictors if p in train.columns]
+            
+            logger.info(f"Training with {len(available_predictors)} features: {available_predictors}")
             
             X_train = train[available_predictors]
             y_train = train["target"]
             X_test = test[available_predictors]
             y_test = test["target"]
             
+            # Remove any rows with NaN values
+            train_mask = ~X_train.isna().any(axis=1)
+            X_train = X_train[train_mask]
+            y_train = y_train[train_mask]
+            
+            test_mask = ~X_test.isna().any(axis=1)
+            X_test = X_test[test_mask]
+            y_test = y_test[test_mask]
+            
+            # Random Forest doesn't need scaling, but we'll keep scaler fitted for consistency
+            self.scaler.fit(X_train)
+            
             # Train model
             self.model.fit(X_train, y_train)
             self.is_trained = True
+            
+            # Store feature names for prediction
+            self.feature_names = available_predictors
             
             # Evaluate model
             y_pred = self.model.predict(X_test)
@@ -163,35 +201,50 @@ class PLPredictionService:
             
             if recent_matches.exists() and len(recent_matches) > 0:
                 # Calculate averages from recent matches
-                # Use goals_for/goals_against from the Match model
+                gf_rolling = sum(m.goals_for for m in recent_matches) / len(recent_matches)
+                ga_rolling = sum(m.goals_against for m in recent_matches) / len(recent_matches)
+                sh_rolling = sum(m.shots for m in recent_matches) / len(recent_matches)
+                sot_rolling = sum(m.shots_on_target for m in recent_matches) / len(recent_matches)
+                dist_rolling = sum(m.distance for m in recent_matches) / len(recent_matches)
+                fk_rolling = sum(m.free_kicks for m in recent_matches) / len(recent_matches)
+                pk_rolling = sum(m.penalties for m in recent_matches) / len(recent_matches)
+                pkatt_rolling = sum(m.penalty_attempts for m in recent_matches) / len(recent_matches)
+                
                 rolling_values = [
-                    sum(m.goals_for for m in recent_matches) / len(recent_matches),  # gf_rolling
-                    sum(m.goals_against for m in recent_matches) / len(recent_matches),  # ga_rolling
-                    sum(m.shots for m in recent_matches) / len(recent_matches),  # sh_rolling
-                    sum(m.shots_on_target for m in recent_matches) / len(recent_matches),  # sot_rolling
-                    sum(m.distance for m in recent_matches) / len(recent_matches),  # dist_rolling
-                    sum(m.free_kicks for m in recent_matches) / len(recent_matches),  # fk_rolling
-                    sum(m.penalties for m in recent_matches) / len(recent_matches),  # pk_rolling
-                    sum(m.penalty_attempts for m in recent_matches) / len(recent_matches),  # pkatt_rolling
+                    gf_rolling, ga_rolling, sh_rolling, sot_rolling,
+                    dist_rolling, fk_rolling, pk_rolling, pkatt_rolling
                 ]
+                
+                # Calculate derived features
+                goal_diff_rolling = gf_rolling - ga_rolling
+                form_rolling = gf_rolling / (ga_rolling + 1)
+                attack_strength = sh_rolling * (sot_rolling / (sh_rolling + 1))
+                defense_strength = 1 / (ga_rolling + 1)
+                
+                derived_values = [goal_diff_rolling, form_rolling, attack_strength, defense_strength]
             else:
                 # Use league averages or defaults if no recent matches
                 rolling_values = [1.5, 1.5, 12.0, 4.0, 0.0, 0.0, 0.0, 0.0]
+                derived_values = [0.0, 1.0, 4.0, 0.4]  # Neutral defaults
             
-            # Create feature vector
-            features = [home_away, opponent_code, hour, day_of_week] + rolling_values
-            feature_names = self.predictors + self.rolling_predictors
+            # Create feature vector with all features in correct order
+            features = [home_away, opponent_code, hour, day_of_week] + rolling_values + derived_values
             
-            # Ensure we have the right number of features
-            if len(features) != len(feature_names):
-                # Pad with zeros if needed
-                features = features[:len(feature_names)]
-                while len(features) < len(feature_names):
-                    features.append(0.0)
+            # Use stored feature names from training
+            if hasattr(self, 'feature_names'):
+                # Create a dict of all features
+                feature_dict = {}
+                all_names = self.predictors + self.rolling_predictors + self.derived_predictors
+                for i, name in enumerate(all_names):
+                    if i < len(features):
+                        feature_dict[name] = features[i]
+                
+                # Order features according to training
+                features = [feature_dict.get(name, 0.0) for name in self.feature_names]
             
             X = np.array(features).reshape(1, -1)
             
-            # Make prediction
+            # Make prediction (no scaling needed for Random Forest)
             prediction_proba = self.model.predict_proba(X)[0]
             prediction_class = self.model.predict(X)[0]
             
