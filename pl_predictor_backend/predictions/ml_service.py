@@ -144,22 +144,42 @@ class PLPredictionService:
             return None
         
         try:
+            from predictions.models import Match
+            
             # Prepare match features
             home_away = 1 if venue == 'H' else 0
             
-            # Get team codes (you might need to implement team encoding)
+            # Get team codes
             opponent_code = self._get_team_code(opponent)
             
             # Extract time features
             hour = 15  # Default to 3 PM if not specified
-            day_of_week = date.weekday()
+            day_of_week = date.weekday() if hasattr(date, 'weekday') else 0
             
-            # For rolling averages, we'll use default values or recent team averages
-            # In a production system, you'd calculate these from recent matches
-            default_rolling = [0.0] * len(self.rolling_predictors)
+            # Get recent team statistics for rolling averages
+            recent_matches = Match.objects.filter(
+                team=team
+            ).order_by('-date')[:5]  # Last 5 matches
+            
+            if recent_matches.exists() and len(recent_matches) > 0:
+                # Calculate averages from recent matches
+                # Use goals_for/goals_against from the Match model
+                rolling_values = [
+                    sum(m.goals_for for m in recent_matches) / len(recent_matches),  # gf_rolling
+                    sum(m.goals_against for m in recent_matches) / len(recent_matches),  # ga_rolling
+                    sum(m.shots for m in recent_matches) / len(recent_matches),  # sh_rolling
+                    sum(m.shots_on_target for m in recent_matches) / len(recent_matches),  # sot_rolling
+                    sum(m.distance for m in recent_matches) / len(recent_matches),  # dist_rolling
+                    sum(m.free_kicks for m in recent_matches) / len(recent_matches),  # fk_rolling
+                    sum(m.penalties for m in recent_matches) / len(recent_matches),  # pk_rolling
+                    sum(m.penalty_attempts for m in recent_matches) / len(recent_matches),  # pkatt_rolling
+                ]
+            else:
+                # Use league averages or defaults if no recent matches
+                rolling_values = [1.5, 1.5, 12.0, 4.0, 0.0, 0.0, 0.0, 0.0]
             
             # Create feature vector
-            features = [home_away, opponent_code, hour, day_of_week] + default_rolling
+            features = [home_away, opponent_code, hour, day_of_week] + rolling_values
             feature_names = self.predictors + self.rolling_predictors
             
             # Ensure we have the right number of features
