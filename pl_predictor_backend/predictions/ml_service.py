@@ -119,9 +119,9 @@ class PLPredictionService:
             # Evaluate model
             y_pred = self.model.predict(X_test)
             accuracy = accuracy_score(y_test, y_pred)
-            precision = precision_score(y_test, y_pred, zero_division=0)
-            recall = recall_score(y_test, y_pred, zero_division=0)
-            f1 = f1_score(y_test, y_pred, zero_division=0)
+            precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
+            recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
+            f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
             
             logger.info(f"Model trained successfully. Accuracy: {accuracy:.3f}, Precision: {precision:.3f}")
             
@@ -200,12 +200,12 @@ class PLPredictionService:
             n_classes = len(prediction_proba)
             
             if n_classes == 3:
-                # Three-class model: Draw, Loss, Win (typical sklearn ordering)
-                result_map = {0: 'D', 1: 'L', 2: 'W'}
+                # Three-class model: Loss, Draw, Win (our encoding: L=0, D=1, W=2)
+                result_map = {0: 'L', 1: 'D', 2: 'W'}
                 probabilities = {
                     'W': float(prediction_proba[2]),
-                    'D': float(prediction_proba[0]),
-                    'L': float(prediction_proba[1])
+                    'D': float(prediction_proba[1]),
+                    'L': float(prediction_proba[0])
                 }
             else:
                 # Binary model: Loss, Win

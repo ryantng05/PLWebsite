@@ -83,7 +83,7 @@ class Command(BaseCommand):
                             'opponent_code': self.get_team_code(row['opponent']),
                             'hour': time_obj.hour,
                             'day_of_week': date.weekday(),
-                            'target': 1 if row['result'] == 'W' else 0,
+                            'target': 2 if row['result'] == 'W' else (1 if row['result'] == 'D' else 0),
                         }
                     )
                     
