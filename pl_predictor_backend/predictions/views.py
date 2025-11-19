@@ -134,16 +134,21 @@ class PredictMatchView(APIView):
                 model_version='v1.0'
             )
             
+            # Extract probabilities from the prediction result
+            probabilities = prediction_result.get('probabilities', {})
+            
             response_data = {
-                'prediction_id': prediction.id,
+                'id': prediction.id,
                 'team': team.name,
                 'opponent': opponent.name,
-                'date': data['date'],
+                'match_date': data['date'].isoformat() if hasattr(data['date'], 'isoformat') else str(data['date']),
                 'venue': data['venue'],
                 'predicted_result': prediction_result['predicted_result'],
+                'win_probability': probabilities.get('W', 0.0),
+                'draw_probability': probabilities.get('D', 0.0),
+                'loss_probability': probabilities.get('L', 0.0),
                 'confidence': prediction_result['confidence'],
-                'probabilities': prediction_result.get('probabilities', {}),
-                'created_at': prediction.created_at
+                'created_at': prediction.created_at.isoformat() if prediction.created_at else None
             }
             
             return Response(response_data, status=status.HTTP_201_CREATED)

@@ -175,20 +175,36 @@ class PLPredictionService:
             prediction_proba = self.model.predict_proba(X)[0]
             prediction_class = self.model.predict(X)[0]
             
-            # Map prediction to result
-            result_map = {0: 'L', 1: 'W'}  # Assuming binary classification
+            # Map prediction to result based on model's classes
+            # Check how many classes the model has
+            n_classes = len(prediction_proba)
+            
+            if n_classes == 3:
+                # Three-class model: Draw, Loss, Win (typical sklearn ordering)
+                result_map = {0: 'D', 1: 'L', 2: 'W'}
+                probabilities = {
+                    'W': float(prediction_proba[2]),
+                    'D': float(prediction_proba[0]),
+                    'L': float(prediction_proba[1])
+                }
+            else:
+                # Binary model: Loss, Win
+                result_map = {0: 'L', 1: 'W'}
+                probabilities = {
+                    'W': float(prediction_proba[1] if len(prediction_proba) > 1 else 0.0),
+                    'D': 0.0,
+                    'L': float(prediction_proba[0] if len(prediction_proba) > 0 else 0.0)
+                }
+            
             predicted_result = result_map.get(prediction_class, 'D')
             
             # Get confidence (probability of the predicted class)
-            confidence = prediction_proba.max()
+            confidence = float(prediction_proba.max())
             
             return {
                 'predicted_result': predicted_result,
                 'confidence': confidence,
-                'probabilities': {
-                    'win': prediction_proba[1] if len(prediction_proba) > 1 else 0.0,
-                    'loss': prediction_proba[0] if len(prediction_proba) > 0 else 0.0,
-                }
+                'probabilities': probabilities
             }
             
         except Exception as e:
