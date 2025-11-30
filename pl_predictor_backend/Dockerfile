@@ -23,29 +23,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project
 COPY . /app/
 
-# Create a script to run the application
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-echo "Waiting for PostgreSQL..."\n\
-while ! pg_isready -h postgres -p 5432 -U postgres; do\n\
-  sleep 1\n\
-done\n\
-\n\
-echo "PostgreSQL is ready!"\n\
-\n\
-echo "Running migrations..."\n\
-python manage.py migrate\n\
-\n\
-echo "Importing CSV data..."\n\
-python manage.py import_csv_data matches.csv || echo "CSV import failed or already imported"\n\
-\n\
-echo "Starting Django development server..."\n\
-python manage.py runserver 0.0.0.0:8000\n\
-' > /app/start.sh && chmod +x /app/start.sh
+# Collect static files
+RUN python manage.py collectstatic --no-input || echo "Static files collection skipped"
 
-EXPOSE 8000
-
-CMD ["/app/start.sh"]
+# Run migrations and start server
+CMD python manage.py migrate && \
+    gunicorn pl_predictor_backend.wsgi:application --bind 0.0.0.0:$PORT
 
 
