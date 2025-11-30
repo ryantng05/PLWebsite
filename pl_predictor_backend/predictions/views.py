@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
+from django.utils import timezone
 from datetime import datetime, timedelta
 import logging
 
@@ -183,14 +184,15 @@ def train_model(request):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         
-        # Save performance metrics
+        # Save performance metrics with current timestamp
         model_performance = ModelPerformance.objects.create(
             model_version='v1.0',
             accuracy=performance['accuracy'],
             precision=performance['precision'],
             recall=performance['recall'],
             f1_score=performance['f1_score'],
-            test_matches_count=performance['test_matches_count']
+            test_matches_count=performance['test_matches_count'],
+            created_at=timezone.now()
         )
         
         return Response({
@@ -258,19 +260,44 @@ def team_stats(request, team_id):
         draws = matches.filter(result='D').count()
         losses = matches.filter(result='L').count()
         
-        win_rate = (wins / total_matches) * 100 if total_matches > 0 else 0
+        # Calculate points (3 for win, 1 for draw, 0 for loss)
+        points = (wins * 3) + (draws * 1)
+        
+        # Calculate goals
+        total_goals_for = sum(match.goals_for for match in matches)
+        total_goals_against = sum(match.goals_against for match in matches)
+        goal_difference = total_goals_for - total_goals_against
+        
+        # Calculate averages (return as decimals 0-1 for frontend formatting)
+        win_rate = wins / total_matches if total_matches > 0 else 0
+        avg_goals_scored = total_goals_for / total_matches if total_matches > 0 else 0
+        avg_goals_conceded = total_goals_against / total_matches if total_matches > 0 else 0
         
         # Recent form (last 5 matches)
         recent_matches = matches.order_by('-date')[:5]
         recent_results = [match.result for match in recent_matches]
         
-        stats = {
-            'team': TeamSerializer(team).data,
-            'total_matches': total_matches,
+        # Build team data with all statistics
+        team_data = {
+            'id': team.id,
+            'name': team.name,
+            'short_name': team.short_name,
+            'matches_played': total_matches,
             'wins': wins,
             'draws': draws,
             'losses': losses,
-            'win_rate': round(win_rate, 2),
+            'points': points,
+            'goals_for': total_goals_for,
+            'goals_against': total_goals_against,
+            'goal_difference': goal_difference,
+            'win_rate': round(win_rate, 4),  # Decimal format (0-1)
+            'avg_goals_scored': round(avg_goals_scored, 2),
+            'avg_goals_conceded': round(avg_goals_conceded, 2)
+        }
+        
+        stats = {
+            'team': team_data,
+            'win_rate': round(win_rate, 4),  # Decimal format (0-1)
             'recent_form': recent_results,
             'recent_matches': MatchSerializer(recent_matches, many=True).data
         }

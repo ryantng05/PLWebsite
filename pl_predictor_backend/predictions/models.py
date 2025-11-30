@@ -98,7 +98,7 @@ class ModelPerformance(models.Model):
     recall = models.FloatField(default=0.0)
     f1_score = models.FloatField(default=0.0)
     test_matches_count = models.IntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now)
     
     def __str__(self):
         return f"{self.model_version} - Accuracy: {self.accuracy:.3f}"

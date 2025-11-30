@@ -8,6 +8,24 @@ class TeamSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'short_name', 'created_at']
 
 
+class TeamStatsSerializer(serializers.Serializer):
+    """Serializer for detailed team statistics"""
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    short_name = serializers.CharField()
+    matches_played = serializers.IntegerField()
+    wins = serializers.IntegerField()
+    draws = serializers.IntegerField()
+    losses = serializers.IntegerField()
+    points = serializers.IntegerField()
+    goals_for = serializers.IntegerField()
+    goals_against = serializers.IntegerField()
+    goal_difference = serializers.IntegerField()
+    win_rate = serializers.FloatField()
+    avg_goals_scored = serializers.FloatField()
+    avg_goals_conceded = serializers.FloatField()
+
+
 class MatchSerializer(serializers.ModelSerializer):
     team_name = serializers.CharField(source='team.name', read_only=True)
     opponent_name = serializers.CharField(source='opponent.name', read_only=True)
@@ -36,12 +54,21 @@ class PredictionSerializer(serializers.ModelSerializer):
 
 
 class ModelPerformanceSerializer(serializers.ModelSerializer):
+    training_date = serializers.DateTimeField(source='created_at', read_only=True)
+    test_set_size = serializers.IntegerField(source='test_matches_count', read_only=True)
+    feature_count = serializers.SerializerMethodField()
+    
     class Meta:
         model = ModelPerformance
         fields = [
             'id', 'model_version', 'accuracy', 'precision', 'recall',
-            'f1_score', 'test_matches_count', 'created_at'
+            'f1_score', 'training_date', 'test_set_size', 'feature_count'
         ]
+    
+    def get_feature_count(self, obj):
+        # Return the number of features used in the model
+        # Base predictors + rolling predictors + derived predictors
+        return 4 + 8 + 1  # home_away, opponent_code, hour, day_of_week + 8 rolling + goal_diff_rolling
 
 
 class PredictionRequestSerializer(serializers.Serializer):
